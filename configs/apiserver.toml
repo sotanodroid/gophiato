@@ -2,4 +2,4 @@ bind_port = "8000"
 log_level = "DEBUG"
 
 [store]
-database_url = "host=localhost dbname=resapi_dev user=postgres password=postgres sslmode=disable"
+database_url = "host=localhost dbname=restapi_dev user=postgres password=postgres sslmode=disable"
