@@ -48,7 +48,7 @@ func (s *Store) User() *UserRepository {
 	}
 
 	s.userRepository = &UserRepository{
-		stroe: s,
+		store: s,
 	}
 
 	return s.userRepository

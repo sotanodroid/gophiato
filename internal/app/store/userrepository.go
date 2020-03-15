@@ -4,7 +4,7 @@ import "github.com/sotanodroid/gophiato/internal/app/model"
 
 // UserRepository ...
 type UserRepository struct {
-	stroe *Store
+	store *Store
 }
 
 // Create creates new user instance
@@ -19,7 +19,7 @@ func (r *UserRepository) Create(u *model.User) (*model.User, error) {
 		) RETURNING id
 	`
 
-	if err := r.stroe.db.QueryRow(query, u.Email, u.EncryptedPassword).Scan(&u.ID); err != nil {
+	if err := r.store.db.QueryRow(query, u.Email, u.EncryptedPassword).Scan(&u.ID); err != nil {
 		return nil, err
 	}
 
@@ -36,7 +36,7 @@ func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 
 	u := &model.User{}
 
-	if err := r.stroe.db.QueryRow(query, email).Scan(
+	if err := r.store.db.QueryRow(query, email).Scan(
 		&u.ID,
 		&u.Email,
 		&u.EncryptedPassword,
