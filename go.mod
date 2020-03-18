@@ -9,5 +9,5 @@ require (
 	github.com/lib/pq v1.3.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.5.1
-	golang.org/x/crypto v0.0.0-20200311171314-f7b00557c8c4
+	golang.org/x/crypto v0.0.0-20200317142112-1b76d66859c6
 )
