@@ -1,70 +1,36 @@
 package apiserver
 
 import (
-	"io"
+	"database/sql"
 	"net"
 	"net/http"
 
-	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
-	"github.com/sotanodroid/gophiato/internal/app/store"
+	"github.com/sotanodroid/gophiato/internal/app/store/sqlstore"
 )
 
-// APIServer ...
-type APIServer struct {
-	config *Config
-	logger *logrus.Logger
-	router *mux.Router
-	store  *store.Store
-}
-
-// NewAPIServer returns new instance of api server
-func NewAPIServer(config *Config) *APIServer {
-	return &APIServer{
-		config: config,
-		logger: logrus.New(),
-		router: mux.NewRouter(),
-	}
-}
-
-// Start starts new server
-func (s *APIServer) Start() error {
-	s.configureLogger()
-	s.configureStore()
-	s.configureRouter()
-
-	s.logger.Info("Sarting service")
-
-	return http.ListenAndServe(
-		net.JoinHostPort("", s.config.Bindport),
-		s.router,
-	)
-}
-
-func (s *APIServer) configureLogger() {
-	level, err := logrus.ParseLevel(s.config.Loglevel)
+// Start ...
+func Start(config *Config) error {
+	db, err := newDB(config.DataBaseURL)
 	if err != nil {
-		s.logger.Error(err)
+		return err
 	}
+	defer db.Close()
 
-	s.logger.SetLevel(level)
+	store := sqlstore.New(db)
+	srv := newServer(store)
+
+	return http.ListenAndServe(net.JoinHostPort("", config.Bindport), srv)
 }
 
-func (s *APIServer) configureStore() {
-	st := store.New(s.config.Store)
-	if err := st.Open(); err != nil {
-		s.logger.Error(err)
+func newDB(databaseURL string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", databaseURL)
+	if err != nil {
+		return nil, err
 	}
 
-	s.store = st
-}
-
-func (s *APIServer) configureRouter() {
-	s.router.HandleFunc("/hello", s.handlehello())
-}
-
-func (s *APIServer) handlehello() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "Hello")
+	if err := db.Ping(); err != nil {
+		return nil, err
 	}
+
+	return db, nil
 }
