@@ -5,6 +5,7 @@ type Config struct {
 	Bindport    string `toml:"bind_port"`
 	Loglevel    string `toml:"log_level"`
 	DataBaseURL string `toml:"database_url"`
+	SessionKey  string `toml:"session_key"`
 }
 
 // NewConfig return new instance of service config

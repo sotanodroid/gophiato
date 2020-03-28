@@ -10,11 +10,11 @@ run:
 test:
 	go test -v -race -timeout 30s ./...
 
-.PHONY: migrate_up
+.PHONY: migrate-up
 migrate_up:
 	 ./migrate -path migrations -database "postgres://postgres:postgres@localhost:5432/restapi_dev?sslmode=disable" up
 
-.PHONY: migrate_down
+.PHONY: migrate-down
 migrate_down:
 	 ./migrate -path migrations -database "postgres://postgres:postgres@localhost:5432/restapi_dev?sslmode=disable" down
 
