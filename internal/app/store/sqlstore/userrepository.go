@@ -66,3 +66,27 @@ func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 
 	return u, nil
 }
+
+// Find finds user in DB by email
+func (r *UserRepository) Find(id int) (*model.User, error) {
+	query := `
+		SELECT id, email, encrypted_password
+		FROM restapi.users
+		WHERE id = $1
+	`
+
+	u := &model.User{}
+
+	if err := r.store.db.QueryRow(query, id).Scan(
+		&u.ID,
+		&u.Email,
+		&u.EncryptedPassword,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, store.ErrRecordNotFound
+		}
+		return nil, err
+	}
+
+	return u, nil
+}
