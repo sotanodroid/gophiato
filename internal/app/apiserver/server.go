@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,23 +13,27 @@ import (
 )
 
 const (
-	sessionName =  "apiserver"
+	sessionName        = "apiserver"
+	ctxKeyUser  ctxKey = iota
 )
 
 var (
 	errIncorrectEmailPassword = errors.New("Incorrect Credentials")
+	errNotAuthenticated       = errors.New("User not authorized")
 )
 
+type ctxKey int8
+
 type server struct {
-	router *mux.Router
-	store  store.Store
+	router       *mux.Router
+	store        store.Store
 	sessionStore sessions.Store
 }
 
 func newServer(store store.Store, sessionStore sessions.Store) *server {
 	s := &server{
-		router: mux.NewRouter(),
-		store:  store,
+		router:       mux.NewRouter(),
+		store:        store,
 		sessionStore: sessionStore,
 	}
 
@@ -44,6 +49,17 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *server) configureRouter() {
 	s.router.HandleFunc("/users", s.handleUsersCreate()).Methods(http.MethodPost)
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods(http.MethodPost)
+
+	// /private/***
+	private := s.router.PathPrefix("/private").Subrouter()
+	private.Use(s.authenticateUser)
+	private.HandleFunc("/who_am_i", s.handleWhoAmI()).Methods(http.MethodGet)
+}
+
+func (s *server) handleWhoAmI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.respond(w, r, http.StatusOK, r.Context().Value(ctxKeyUser).(*model.User))
+	}
 }
 
 func (s *server) handleUsersCreate() http.HandlerFunc {
@@ -75,6 +91,32 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 	}
 }
 
+func (s *server) authenticateUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		id, ok := session.Values["user_id"]
+		if !ok {
+			s.error(w, r, http.StatusUnauthorized, errNotAuthenticated)
+			return
+		}
+
+		u, err := s.store.User().Find(id.(int))
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(
+			context.WithValue(r.Context(), ctxKeyUser, u),
+		))
+	})
+}
+
 func (s *server) handleSessionsCreate() http.HandlerFunc {
 
 	type request struct {
@@ -96,13 +138,13 @@ func (s *server) handleSessionsCreate() http.HandlerFunc {
 		}
 
 		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil{
+		if err != nil {
 			s.error(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
 		session.Values["user_id"] = user.ID
-		if err := s.sessionStore.Save(r, w, session); err != nil{
+		if err := s.sessionStore.Save(r, w, session); err != nil {
 			s.error(w, r, http.StatusInternalServerError, err)
 			return
 		}
