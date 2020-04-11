@@ -49,7 +49,7 @@ func (u *User) Sanitize() {
 	u.Password = ""
 }
 
-// ComparePassword ... 
+// ComparePassword ...
 func (u *User) ComparePassword(password string) bool {
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(u.EncryptedPassword),

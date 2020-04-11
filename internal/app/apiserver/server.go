@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 	"github.com/sotanodroid/gophiato/internal/app/model"
 	"github.com/sotanodroid/gophiato/internal/app/store"
 )
@@ -15,6 +19,7 @@ import (
 const (
 	sessionName        = "apiserver"
 	ctxKeyUser  ctxKey = iota
+	ctxKeyRequestID
 )
 
 var (
@@ -26,6 +31,7 @@ type ctxKey int8
 
 type server struct {
 	router       *mux.Router
+	logger       *logrus.Logger
 	store        store.Store
 	sessionStore sessions.Store
 }
@@ -33,6 +39,7 @@ type server struct {
 func newServer(store store.Store, sessionStore sessions.Store) *server {
 	s := &server{
 		router:       mux.NewRouter(),
+		logger:       logrus.New(),
 		store:        store,
 		sessionStore: sessionStore,
 	}
@@ -47,6 +54,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) configureRouter() {
+	s.router.Use(s.setRequestID)
+	s.router.Use(s.logRequest)
+	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
 	s.router.HandleFunc("/users", s.handleUsersCreate()).Methods(http.MethodPost)
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods(http.MethodPost)
 
@@ -54,6 +64,16 @@ func (s *server) configureRouter() {
 	private := s.router.PathPrefix("/private").Subrouter()
 	private.Use(s.authenticateUser)
 	private.HandleFunc("/who_am_i", s.handleWhoAmI()).Methods(http.MethodGet)
+}
+
+func (s *server) setRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := uuid.New().String()
+		w.Header().Set("X-Request-ID", id)
+		next.ServeHTTP(w, r.WithContext(
+			context.WithValue(r.Context(), ctxKeyRequestID, id),
+		))
+	})
 }
 
 func (s *server) handleWhoAmI() http.HandlerFunc {
@@ -89,6 +109,23 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 		u.Sanitize()
 		s.respond(w, r, http.StatusCreated, u)
 	}
+}
+
+func (s *server) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := s.logger.WithFields(logrus.Fields{
+			"remote_addr": r.RemoteAddr,
+			"request_id":  r.Context().Value(ctxKeyRequestID),
+		})
+
+		logger.Info("Started %s %s", r.Method, r.RequestURI)
+
+		start := time.Now()
+
+		next.ServeHTTP(w, r)
+
+		logger.Info("completed in %v", time.Now().Sub(start))
+	})
 }
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
